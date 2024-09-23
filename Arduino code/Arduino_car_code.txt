@@ -1,0 +1,351 @@
+
+// Motor A connections
+#define IN1 2
+#define IN2 3
+#define ENA 10  // Motor A speed control
+
+// Motor B connections
+#define IN3 4
+#define IN4 5
+#define ENB 11  // Motor B speed control
+
+// Ultrasonic sensor connections for front
+#define TRIG_PIN 8
+#define ECHO_PIN 9
+
+// Ultrasonic sensor connections for rear
+#define REAR_TRIG_PIN 6
+#define REAR_ECHO_PIN 7
+
+// Lights
+#define FRONT_LIGHT 12
+#define REAR_LIGHT 13
+
+char command;
+
+
+int speedLevel = 255;  // Default max speed (255 for full PWM)
+
+
+void setup()
+{
+  // Set motor control pins as outputs
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  // Set light pins as outputs
+  pinMode(FRONT_LIGHT, OUTPUT);
+  pinMode(REAR_LIGHT, OUTPUT);
+
+  // Set ultrasonic sensor pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(REAR_TRIG_PIN, OUTPUT);
+  pinMode(REAR_ECHO_PIN, INPUT);
+
+  Serial.begin(9600);  // Set baud rate for Bluetooth module
+}
+
+
+
+
+// Function to convert PWM value to speed in km/h
+float getSpeedFromPWM(int pwmValue) {
+    float maxSpeed = 10.0; // Max speed in km/h
+    return (pwmValue / 255.0) * maxSpeed;
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    command = Serial.read();
+
+
+
+    if (command >= '0' && command <= '7') {
+      // Adjust speed based on slider value from 1 to 6
+      speedLevel = map(command, '0', '7', 0, 255);  // Map speed between 0 and 255
+
+          // Send the speed level to Flutter
+    Serial.print("SPEED:");  // Prefix to identify speed data
+    Serial.println(speedLevel);  // Send the speed value
+
+    // Calculate and send current speed
+    float currentSpeed = getSpeedFromPWM(speedLevel);
+    Serial.print("Current Speed: ");
+    Serial.println(currentSpeed);
+
+    } else {
+      Stop();  // Initialize with motors stopped
+    // Execute movement commands based on the main command
+    switch(command) {
+      case 'F':
+        forward();
+        break;
+      case 'B':
+        back();
+        break;
+      case 'L':
+        left();
+        break;
+      case 'R':
+        right();
+        break;
+      case 'S':
+        Stop();
+        break;
+      case 'A':
+        slowLeft();
+        break;
+      case 'D':
+        slowRight();
+        break;
+      case 'W':
+        slowForward();
+        break;
+      case 'Y':
+        slowBackward();
+        break;
+      case 'H':  // Turn on front light
+        digitalWrite(FRONT_LIGHT, HIGH);
+        break;
+      case 'J':  // Turn off front light
+        digitalWrite(FRONT_LIGHT, LOW);
+        break;
+      case 'N':  // Turn on rear light
+        digitalWrite(REAR_LIGHT, HIGH);
+        break;
+      case 'M':  // Turn off rear light
+        digitalWrite(REAR_LIGHT, LOW);
+        break;
+      case 'Q':  // Spin move
+        spin();
+        break;
+      case 'Z':  // Zigzag move
+        zigzag();
+        break;
+      case 'U':  // U-turn move
+        uTurn();
+        break;
+      case 'C':  // Circle move
+        circle();
+        break;
+      case 'O':  // Avoid obstacle (custom move)
+        avoidObstacle();
+        break;
+      default:
+        Stop();  // Initialize with motors stopped if no valid command
+        break;
+    }
+  }
+  }
+
+  // Continuously check for obstacles
+  if (isObstacleDetected()) {
+    handleFrontObstacle(); // Execute obstacle handling for front
+  }
+
+  if (isRearObstacleDetected()) {
+    handleRearObstacle(); // Execute obstacle handling for rear
+  }
+
+
+}
+
+
+// Functions for obstacle detection
+
+bool isObstacleDetected() {
+  long duration, distance;
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  duration = pulseIn(ECHO_PIN, HIGH);
+  distance = (duration / 2) / 29.1; // Convert duration to distance in cm
+
+  return distance < 10; // Return true if obstacle is detected within 10 cm
+}
+
+bool isRearObstacleDetected() {
+  long duration, distance;
+  digitalWrite(REAR_TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(REAR_TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(REAR_TRIG_PIN, LOW);
+
+  duration = pulseIn(REAR_ECHO_PIN, HIGH);
+  distance = (duration / 2) / 29.1; // Convert duration to distance in cm
+
+  return distance < 7; // Return true if rear obstacle is detected within 7 cm
+}
+
+// Movement Functions with dynamic speed
+
+void left() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void right() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void forward() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void back() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void Stop() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+    analogWrite(ENA, 0);
+    analogWrite(ENB, 0);
+}
+
+void slowLeft() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void slowRight() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+
+// Slow Forward/Backward Functions
+
+void slowForward() {
+    digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void slowBackward() {
+    digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+
+}
+
+// Special Moves
+
+void spin() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedLevel);
+  analogWrite(ENB, speedLevel);
+}
+
+void zigzag() {
+  for (int i = 0; i < 3; i++) {  // Do 3 zigzags
+    left();
+    delay(500);  // Turn left for 500 ms
+    right();
+    delay(500);  // Turn right for 500 ms
+  }
+  Stop();  // Stop after zigzagging
+}
+
+void uTurn() {
+  back();       // Move backward
+  delay(300);   // Reverse for 500 ms
+  Stop();
+  right(); // Turn sharply to the right
+  delay(600);   // Turn right for 800 ms
+  Stop();
+}
+
+void circle() {
+  // Stop the left motor
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+
+  // Run the right motor forward (or any direction you choose)
+  digitalWrite(IN3, HIGH); // Right motor forward
+  digitalWrite(IN4, LOW);  // Right motor backward
+
+  // Set speed for right motor only
+  analogWrite(ENA, 0);       // Left motor speed (disabled)
+  analogWrite(ENB, speedLevel);
+}
+
+
+void avoidObstacle() {
+  back();        // Move backward to avoid obstacle
+  delay(500);    // Move back for 500 ms
+  Stop();
+  delay(200);    // Brief stop
+  left();   // Turn left sharply
+  delay(400);    // Turn left for 400 ms
+  Stop();
+  delay(200);    // Brief stop
+  forward();     // Move forward again
+  delay(500);    // Move forward for 500 ms
+  Stop();
+}
+
+// Obstacle Handling Functions
+
+void handleFrontObstacle() {
+  slowBackward();  // Move forward slowly
+  delay(300);     // Move slowly for 500 ms
+  right();        // Turn right to avoid obstacle
+  delay(200);     // Turn right for 800 ms
+  Stop();
+}
+
+void handleRearObstacle() {
+  slowForward();  // Move forward slowly
+  delay(300);     // Move slowly for 500 ms
+  left();         // Turn left to avoid rear obstacle
+  delay(200);     // Turn left for 800 ms
+  Stop();
+}
